@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>5ส Audit — WFDC</title>
+<style>
+  /* ====== ตั้งค่า API_URL หลัง Deploy Web app (ดูขั้นตอนในไฟล์ Code.gs) ====== */
+  :root{
+    --bg:#eef1f4; --surface:#fff; --line:#d7dde4; --ink:#1a2330; --muted:#66727f;
+    --accent:#1f5fd6; --accent-ink:#fff;
+    --open:#d64027; --open-bg:#fdece9;
+    --fixed:#c07a00; --fixed-bg:#fdf3df;
+    --closed:#1f8a4c; --closed-bg:#e7f5ec;
+    --rejected:#7b3fd1; --rejected-bg:#f1eafb;
+    --radius:14px; --shadow:0 1px 2px rgba(20,30,50,.08),0 2px 8px rgba(20,30,50,.05);
+    --font:-apple-system,BlinkMacSystemFont,"Noto Sans Thai","Noto Sans Myanmar","Segoe UI",Roboto,sans-serif;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--font);font-size:16px;line-height:1.5}
+  body{max-width:560px;margin:0 auto;min-height:100vh;padding-bottom:24px}
+
+  header{position:sticky;top:0;z-index:20;background:var(--surface);border-bottom:1px solid var(--line);
+    padding:10px 14px;display:flex;align-items:center;gap:10px}
+  header .brand{font-weight:800;letter-spacing:-.3px;font-size:18px}
+  header .brand small{display:block;font-weight:600;font-size:11px;color:var(--muted);letter-spacing:0}
+  header .spacer{flex:1}
+  .lang{display:flex;border:1px solid var(--line);border-radius:999px;overflow:hidden}
+  .lang button{border:0;background:transparent;padding:5px 9px;font-size:12px;font-weight:700;color:var(--muted);cursor:pointer}
+  .lang button.on{background:var(--ink);color:#fff}
+  .iconbtn{border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:6px 9px;font-size:13px;cursor:pointer;color:var(--muted)}
+
+  main{padding:14px}
+  .banner{background:#3a1212;color:#ffd7d1;padding:12px 14px;border-radius:10px;font-size:13px;margin:14px;line-height:1.55}
+  .banner code{background:rgba(255,255,255,.12);padding:1px 5px;border-radius:4px}
+
+  .tabs{display:flex;gap:6px;margin-bottom:14px;background:var(--surface);border:1px solid var(--line);
+    border-radius:12px;padding:5px}
+  .tabs button{flex:1;border:0;background:transparent;padding:10px 8px;border-radius:8px;font-weight:700;
+    font-size:14px;color:var(--muted);cursor:pointer}
+  .tabs button.on{background:var(--accent);color:var(--accent-ink)}
+
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);
+    box-shadow:var(--shadow);padding:16px;margin-bottom:14px}
+  label.f{display:block;font-size:13px;font-weight:700;color:var(--muted);margin:14px 0 6px}
+  label.f:first-child{margin-top:0}
+  input[type=text],textarea,select{width:100%;border:1.5px solid var(--line);border-radius:10px;
+    padding:12px;font-family:inherit;font-size:16px;background:#fbfcfd;color:var(--ink)}
+  textarea{min-height:74px;resize:vertical}
+  select{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%2366727f' stroke-width='2' fill='none'/%3E%3C/svg%3E");
+    background-repeat:no-repeat;background-position:right 14px center;padding-right:36px}
+  input:focus,textarea:focus,select:focus{outline:none;border-color:var(--accent)}
+
+  .btn{display:block;width:100%;border:0;border-radius:11px;padding:14px;font-family:inherit;font-size:16px;
+    font-weight:800;cursor:pointer;background:var(--accent);color:var(--accent-ink);margin-top:18px}
+  .btn:active{transform:translateY(1px)}
+  .btn:disabled{opacity:.5}
+  .btn.ghost{background:var(--surface);color:var(--ink);border:1.5px solid var(--line);margin-top:10px}
+  .btn.ok{background:var(--closed)} .btn.warn{background:var(--rejected)}
+  .btn.sm{padding:10px;font-size:14px;margin-top:0;width:auto}
+
+  .photo-slot{border:2px dashed var(--line);border-radius:12px;padding:18px;text-align:center;color:var(--muted);
+    cursor:pointer;background:#fbfcfd}
+  .photo-slot.filled{border-style:solid;padding:0;overflow:hidden}
+  .photo-slot img{display:block;width:100%;max-height:240px;object-fit:cover}
+  .photo-slot .cam{font-size:26px;display:block;margin-bottom:4px}
+
+  .chip{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:800;padding:4px 10px;border-radius:999px}
+  .st-OPEN{color:var(--open);background:var(--open-bg)}
+  .st-FIXED{color:var(--fixed);background:var(--fixed-bg)}
+  .st-CLOSED{color:var(--closed);background:var(--closed-bg)}
+  .st-REJECTED{color:var(--rejected);background:var(--rejected-bg)}
+  .pri{font-size:12px;font-weight:800}
+  .pri.high{color:var(--open)} .pri.medium{color:var(--fixed)} .pri.low{color:var(--muted)}
+
+  .issue{background:var(--surface);border:1px solid var(--line);border-left:5px solid var(--line);
+    border-radius:12px;box-shadow:var(--shadow);padding:14px;margin-bottom:12px}
+  .issue.OPEN{border-left-color:var(--open)} .issue.FIXED{border-left-color:var(--fixed)}
+  .issue.CLOSED{border-left-color:var(--closed)} .issue.REJECTED{border-left-color:var(--rejected)}
+  .issue .top{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px}
+  .issue .no{font-size:12px;color:var(--muted);font-weight:700}
+  .issue h4{margin:2px 0 4px;font-size:16px}
+  .issue .meta{font-size:13px;color:var(--muted);margin-bottom:2px}
+  .issue .detail{font-size:14px;margin:6px 0}
+  .issue .note{font-size:13px;background:var(--rejected-bg);color:var(--rejected);padding:8px 10px;border-radius:8px;margin:8px 0}
+  .issue .actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+
+  .stats{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:14px}
+  .stat{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px;box-shadow:var(--shadow)}
+  .stat .n{font-size:28px;font-weight:800;letter-spacing:-1px;line-height:1}
+  .stat .l{font-size:12px;color:var(--muted);font-weight:700;margin-top:4px}
+  .filters{display:flex;gap:8px;margin-bottom:14px}
+  .filters select{flex:1}
+
+  .empty{text-align:center;color:var(--muted);padding:40px 20px;font-size:14px}
+  .hidden{display:none!important}
+
+  .modal{position:fixed;inset:0;background:rgba(10,15,25,.82);z-index:50;display:flex;align-items:center;
+    justify-content:center;padding:16px}
+  .modal img{max-width:100%;max-height:82vh;border-radius:10px}
+  .modal .x{position:absolute;top:14px;right:16px;color:#fff;font-size:30px;font-weight:300;cursor:pointer;line-height:1}
+  .modal .load{color:#fff;font-size:14px}
+
+  .toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);background:var(--ink);color:#fff;
+    padding:11px 18px;border-radius:999px;font-size:14px;font-weight:700;z-index:60;box-shadow:var(--shadow);
+    opacity:0;transition:opacity .2s}
+  .toast.show{opacity:1}
+  .spin{width:16px;height:16px;border:2px solid rgba(255,255,255,.4);border-top-color:#fff;border-radius:50%;
+    display:inline-block;animation:sp .7s linear infinite;vertical-align:-3px}
+  @keyframes sp{to{transform:rotate(360deg)}}
+  @media (prefers-reduced-motion:reduce){.spin{animation:none}}
+</style>
+</head>
+<body>
+
+<header class="hidden" id="hdr">
+  <div class="brand">5ส Audit<small>WFDC · CJ Logistics</small></div>
+  <div class="spacer"></div>
+  <div class="lang" id="lang"></div>
+  <button class="iconbtn" id="switchUser" title="switch">⇄</button>
+</header>
+
+<div id="noApi" class="banner hidden"></div>
+<main id="app"></main>
+
+<div class="modal hidden" id="modal"><span class="x" id="modalX">×</span><div id="modalBody"></div></div>
+<div class="toast" id="toast"></div>
+
+<script>
+/* ============================================================
+   ตั้งค่า: วาง Web app URL ที่ได้จาก Deploy ตรงนี้
+   ============================================================ */
+const API_URL = "https://script.google.com/macros/s/AKfycbwkQ3cnsYhiQCXKYMIY78e5syfXegaWBK47HWCw9PL6-4ub4o4W-iGZk3RvM6j2Yig5/exec";
+
+/* ---------------- i18n ---------------- */
+const T = {
+  appTitle:{th:'5ส Audit',en:'5S Audit',my:'5S စစ်ဆေးမှု'},
+  chooseRole:{th:'เข้าใช้งานในบทบาท',en:'Sign in as',my:'အသုံးပြုမည့်အခန်းကဏ္ဍ'},
+  supervisor:{th:'หัวหน้างาน',en:'Supervisor',my:'ကြီးကြပ်ရေးမှူး'},
+  supervisorSub:{th:'เดินตรวจ · แจ้ง · ตรวจรับ',en:'Inspect · report · review',my:'စစ်ဆေး · တိုင် · အတည်ပြု'},
+  department:{th:'แผนก (ผู้แก้ไข)',en:'Department',my:'ဌာန (ပြင်ဆင်သူ)'},
+  departmentSub:{th:'รับงาน · แก้ไข · ยืนยัน',en:'Fix assigned items',my:'ပြင်ဆင် · အတည်ပြု'},
+  selectZone:{th:'เลือกเขตที่ดูแล',en:'Select your zone',my:'သင့်ဇုန်ရွေးပါ'},
+  yourName:{th:'ชื่อของคุณ',en:'Your name',my:'သင့်အမည်'},
+  start:{th:'เริ่มใช้งาน',en:'Continue',my:'ဆက်လုပ်ရန်'},
+  tabReport:{th:'แจ้งปัญหา',en:'Report',my:'တိုင်ကြားရန်'},
+  tabReview:{th:'รอตรวจรับ',en:'Review',my:'စစ်ဆေးရန်'},
+  tabDash:{th:'ภาพรวม',en:'Overview',my:'ခြုံငုံ'},
+  tabQueue:{th:'งานของฉัน',en:'My tasks',my:'ကျွန်ုပ်၏အလုပ်'},
+  zone:{th:'เขต',en:'Zone',my:'ဇုန်'},
+  topic:{th:'หัวข้อปัญหา',en:'Issue topic',my:'ပြဿနာခေါင်းစဉ်'},
+  detail:{th:'รายละเอียดเพิ่มเติม',en:'More detail (optional)',my:'အသေးစိတ် (ရွေးချယ်)'},
+  detailPh:{th:'อธิบายจุดที่ต้องแก้ไข…',en:'Describe what to fix…',my:'ပြင်ရမည့်အချက်…'},
+  priority:{th:'ความเร่งด่วน',en:'Priority',my:'အရေးပေါ်အဆင့်'},
+  high:{th:'สูง',en:'High',my:'မြင့်'},medium:{th:'กลาง',en:'Medium',my:'အလတ်'},low:{th:'ต่ำ',en:'Low',my:'နိမ့်'},
+  photoBefore:{th:'รูปก่อนแก้ไข',en:'Before photo',my:'မပြင်မီ ဓာတ်ပုံ'},
+  photoAfter:{th:'รูปหลังแก้ไข',en:'After photo',my:'ပြင်ပြီး ဓာတ်ပုံ'},
+  takePhoto:{th:'แตะเพื่อถ่าย / เลือกรูป',en:'Tap to take / pick photo',my:'ဓာတ်ပုံ ရိုက်/ရွေးရန် နှိပ်ပါ'},
+  send:{th:'แจ้งปัญหา',en:'Send report',my:'တိုင်ကြားရန်'},
+  markFixed:{th:'แก้เสร็จ ส่งตรวจ',en:'Submit fix',my:'ပြင်ပြီး တင်ရန်'},
+  approve:{th:'ปิดงาน',en:'Approve',my:'အတည်ပြုပိတ်'},
+  reject:{th:'ตีกลับ',en:'Reject',my:'ပြန်ပို့'},
+  rejectReason:{th:'เหตุผลที่ตีกลับ',en:'Reason for rejection',my:'ပြန်ပို့ရသည့်အကြောင်း'},
+  confirm:{th:'ยืนยัน',en:'Confirm',my:'အတည်ပြု'},
+  cancel:{th:'ยกเลิก',en:'Cancel',my:'ပယ်ဖျက်'},
+  viewBefore:{th:'ดูรูปก่อน',en:'Before',my:'မပြင်မီ'},
+  viewAfter:{th:'ดูรูปหลัง',en:'After',my:'ပြင်ပြီး'},
+  reportedBy:{th:'ผู้แจ้ง',en:'By',my:'တိုင်ကြားသူ'},
+  fixedBy:{th:'ผู้แก้ไข',en:'Fixed by',my:'ပြင်ဆင်သူ'},
+  st_OPEN:{th:'รอแก้ไข',en:'Open',my:'ပြင်ရန်ကျန်'},
+  st_FIXED:{th:'รอตรวจรับ',en:'Awaiting review',my:'စစ်ဆေးရန်စောင့်'},
+  st_CLOSED:{th:'ปิดงานแล้ว',en:'Closed',my:'ပြီးမြောက်'},
+  st_REJECTED:{th:'แก้ไม่ผ่าน',en:'Rejected',my:'ပြန်ပြင်ရန်'},
+  allZones:{th:'ทุกเขต',en:'All zones',my:'ဇုန်အားလုံး'},
+  allStatus:{th:'ทุกสถานะ',en:'All status',my:'အခြေအနေအားလုံး'},
+  s_total:{th:'ทั้งหมด',en:'Total',my:'စုစုပေါင်း'},
+  s_open:{th:'รอแก้ไข',en:'Open',my:'ပြင်ရန်ကျန်'},
+  s_fixed:{th:'รอตรวจรับ',en:'To review',my:'စစ်ဆေးရန်'},
+  s_closed:{th:'ปิดแล้ว',en:'Closed',my:'ပြီးမြောက်'},
+  s_rate:{th:'อัตราปิดงาน',en:'Close rate',my:'ပြီးမြောက်နှုန်း'},
+  s_avg:{th:'เวลาแก้เฉลี่ย',en:'Avg fix time',my:'ပျမ်းမျှပြင်ချိန်'},
+  hours:{th:'ชม.',en:'h',my:'နာရီ'},
+  noItems:{th:'ยังไม่มีรายการ',en:'No items yet',my:'စာရင်းမရှိသေးပါ'},
+  noTasks:{th:'ไม่มีงานค้าง เยี่ยมมาก!',en:'No pending tasks. Great!',my:'ကျန်အလုပ်မရှိပါ'},
+  required:{th:'กรุณากรอกข้อมูลและถ่ายรูปให้ครบ',en:'Please complete all fields and photo',my:'အချက်အလက်နှင့်ဓာတ်ပုံ ဖြည့်ပါ'},
+  needAfter:{th:'กรุณาถ่ายรูปหลังแก้ไข',en:'Please add the after photo',my:'ပြင်ပြီးဓာတ်ပုံ ထည့်ပါ'},
+  reportSent:{th:'แจ้งปัญหาแล้ว',en:'Report sent',my:'တိုင်ကြားပြီး'},
+  fixSent:{th:'ส่งตรวจแล้ว',en:'Submitted',my:'တင်ပြီး'},
+  closedMsg:{th:'ปิดงานแล้ว',en:'Closed',my:'ပိတ်ပြီး'},
+  rejectedMsg:{th:'ตีกลับแล้ว',en:'Rejected',my:'ပြန်ပို့ပြီး'},
+  errNet:{th:'เชื่อมต่อไม่ได้ ลองใหม่',en:'Connection error',my:'ချိတ်ဆက်မှုမအောင်မြင်'},
+  loading:{th:'กำลังโหลด…',en:'Loading…',my:'ခဏစောင့်ပါ…'}
+};
+
+const noApiMsg = {
+  th:'⚠️ ยังไม่ได้ตั้งค่า API_URL — เปิดไฟล์ index.html แล้ววาง Web app URL ที่ได้จาก Deploy ลงในตัวแปร <code>API_URL</code> (บรรทัดบนสุดของ &lt;script&gt;)',
+  en:'⚠️ API_URL is not set — open index.html and paste your deployed Web app URL into <code>API_URL</code>.',
+  my:'⚠️ API_URL မသတ်မှတ်ရသေးပါ — index.html ဖွင့်၍ Web app URL ကို <code>API_URL</code> တွင်ထည့်ပါ။'
+};
+
+/* ---------------- state ---------------- */
+let LANG = localStorage.getItem('lang') || 'th';
+let SESSION = JSON.parse(localStorage.getItem('session') || 'null'); // {role, name, zone}
+let CONFIG = null;
+let CUR_TAB = null;
+
+const $ = s => document.querySelector(s);
+const t = k => (T[k] && T[k][LANG]) || (T[k] && T[k].th) || k;
+const topicLabel = key => { const x=(CONFIG?.topics||[]).find(o=>o.key===key); return x? x[LANG]||x.th : key; };
+const zoneName = id => { const z=(CONFIG?.zones||[]).find(o=>o.id===id); return z? z.name : id; };
+
+/* ---------------- api ---------------- */
+async function api(action, payload){
+  const res = await fetch(API_URL, { method:'POST', body: JSON.stringify({action, payload:payload||{}}) });
+  return res.json();
+}
+async function loadPhoto(id){
+  const res = await fetch(API_URL + '?action=photo&id=' + encodeURIComponent(id));
+  const b64 = await res.text();
+  return 'data:image/jpeg;base64,' + b64;
+}
+
+/* ---------------- photo capture + resize ---------------- */
+function pickPhoto(onReady){
+  const inp = document.createElement('input');
+  inp.type='file'; inp.accept='image/*';
+  inp.onchange = () => { if(inp.files[0]) resizeImage(inp.files[0], 1280, .72).then(onReady); };
+  inp.click();
+}
+function resizeImage(file, maxDim, quality){
+  return new Promise((resolve,reject)=>{
+    const img=new Image(), url=URL.createObjectURL(file);
+    img.onload=()=>{
+      let w=img.width, h=img.height;
+      if(w>h && w>maxDim){ h=Math.round(h*maxDim/w); w=maxDim; }
+      else if(h>=w && h>maxDim){ w=Math.round(w*maxDim/h); h=maxDim; }
+      const c=document.createElement('canvas'); c.width=w; c.height=h;
+      c.getContext('2d').drawImage(img,0,0,w,h);
+      URL.revokeObjectURL(url);
+      resolve(c.toDataURL('image/jpeg', quality));
+    };
+    img.onerror=reject; img.src=url;
+  });
+}
+
+/* ---------------- ui helpers ---------------- */
+function toast(msg){ const el=$('#toast'); el.textContent=msg; el.classList.add('show'); setTimeout(()=>el.classList.remove('show'),2200); }
+function showModalPhoto(id){
+  const m=$('#modal'); m.classList.remove('hidden');
+  $('#modalBody').innerHTML='<div class="load">'+t('loading')+'</div>';
+  loadPhoto(id).then(src=>{ $('#modalBody').innerHTML='<img src="'+src+'">'; })
+    .catch(()=>{ $('#modalBody').innerHTML='<div class="load">'+t('errNet')+'</div>'; });
+}
+$('#modalX').onclick=()=>$('#modal').classList.add('hidden');
+$('#modal').onclick=e=>{ if(e.target.id==='modal') $('#modal').classList.add('hidden'); };
+
+function renderLang(){
+  $('#lang').innerHTML = ['th','en','my'].map(l=>
+    `<button class="${l===LANG?'on':''}" data-l="${l}">${l.toUpperCase()}</button>`).join('');
+  $('#lang').querySelectorAll('button').forEach(b=>b.onclick=()=>{
+    LANG=b.dataset.l; localStorage.setItem('lang',LANG); document.documentElement.lang=LANG;
+    renderLang(); route();
+  });
+}
+
+/* ---------------- screens ---------------- */
+function route(){
+  if(!API_URL){ $('#noApi').classList.remove('hidden'); $('#noApi').innerHTML=noApiMsg[LANG]; }
+  if(!SESSION){ $('#hdr').classList.add('hidden'); renderLogin(); return; }
+  $('#hdr').classList.remove('hidden');
+  if(SESSION.role==='supervisor') renderSupervisor();
+  else renderDepartment();
+}
+
+function renderLogin(){
+  const zoneOpts = (CONFIG?.zones||[]).map(z=>`<option value="${z.id}">${z.name}</option>`).join('');
+  $('#app').innerHTML = `
+    <div style="text-align:center;padding:22px 0 6px">
+      <div style="font-size:30px;font-weight:800;letter-spacing:-.5px">5ส Audit</div>
+      <div style="color:var(--muted);font-size:13px;margin-top:2px">WFDC · CJ Logistics</div>
+    </div>
+    <div class="lang" id="langLogin" style="width:max-content;margin:10px auto 20px"></div>
+    <div class="card">
+      <div style="font-size:13px;font-weight:700;color:var(--muted);margin-bottom:12px">${t('chooseRole')}</div>
+      <button class="rolebtn" data-role="supervisor" style="width:100%;text-align:left;border:1.5px solid var(--line);
+        background:#fbfcfd;border-radius:12px;padding:14px;margin-bottom:10px;cursor:pointer">
+        <div style="font-weight:800;font-size:16px">${t('supervisor')}</div>
+        <div style="color:var(--muted);font-size:13px">${t('supervisorSub')}</div>
+      </button>
+      <button class="rolebtn" data-role="department" style="width:100%;text-align:left;border:1.5px solid var(--line);
+        background:#fbfcfd;border-radius:12px;padding:14px;cursor:pointer">
+        <div style="font-weight:800;font-size:16px">${t('department')}</div>
+        <div style="color:var(--muted);font-size:13px">${t('departmentSub')}</div>
+      </button>
+
+      <div id="loginZone" class="hidden">
+        <label class="f">${t('selectZone')}</label>
+        <select id="inZone">${zoneOpts}</select>
+      </div>
+      <label class="f">${t('yourName')}</label>
+      <input type="text" id="inName" placeholder="${t('yourName')}" value="${SESSION?.name||''}">
+      <button class="btn" id="startBtn" disabled>${t('start')}</button>
+    </div>`;
+
+  // login language switcher
+  const ll=$('#langLogin');
+  ll.innerHTML=['th','en','my'].map(l=>`<button class="${l===LANG?'on':''}" data-l="${l}">${l.toUpperCase()}</button>`).join('');
+  ll.querySelectorAll('button').forEach(b=>b.onclick=()=>{LANG=b.dataset.l;localStorage.setItem('lang',LANG);renderLang();renderLogin();});
+
+  let role=null;
+  const btn=$('#startBtn'), name=$('#inName');
+  const refresh=()=>{ btn.disabled=!(role && name.value.trim()); };
+  $('#app').querySelectorAll('.rolebtn').forEach(b=>b.onclick=()=>{
+    role=b.dataset.role;
+    $('#app').querySelectorAll('.rolebtn').forEach(x=>x.style.borderColor='var(--line)');
+    b.style.borderColor='var(--accent)';
+    $('#loginZone').classList.toggle('hidden', role!=='department');
+    refresh();
+  });
+  name.oninput=refresh;
+  btn.onclick=()=>{
+    SESSION={ role, name:name.value.trim(), zone: role==='department' ? $('#inZone').value : null };
+    localStorage.setItem('session', JSON.stringify(SESSION));
+    CUR_TAB = role==='supervisor' ? 'report' : 'queue';
+    route();
+  };
+}
+
+/* ------- supervisor ------- */
+function renderSupervisor(){
+  const tabs=[['report',t('tabReport')],['review',t('tabReview')],['dash',t('tabDash')]];
+  CUR_TAB = CUR_TAB && tabs.some(x=>x[0]===CUR_TAB) ? CUR_TAB : 'report';
+  $('#app').innerHTML = tabBar(tabs) + `<div id="tabBody"></div>`;
+  bindTabs(renderSupervisor);
+  if(CUR_TAB==='report') supReportForm();
+  else if(CUR_TAB==='review') listIssues('#tabBody',{status:'FIXED'},'review');
+  else dashboard('#tabBody');
+}
+
+function supReportForm(){
+  const zoneOpts=(CONFIG?.zones||[]).map(z=>`<option value="${z.id}">${z.name}</option>`).join('');
+  const topicOpts=(CONFIG?.topics||[]).map(o=>`<option value="${o.key}">${o[LANG]||o.th}</option>`).join('');
+  $('#tabBody').innerHTML=`
+    <div class="card">
+      <label class="f">${t('zone')}</label>
+      <select id="rZone">${zoneOpts}</select>
+      <label class="f">${t('topic')}</label>
+      <select id="rTopic">${topicOpts}</select>
+      <label class="f">${t('detail')}</label>
+      <textarea id="rDetail" placeholder="${t('detailPh')}"></textarea>
+      <label class="f">${t('priority')}</label>
+      <select id="rPriority">
+        <option value="high">${t('high')}</option>
+        <option value="medium" selected>${t('medium')}</option>
+        <option value="low">${t('low')}</option>
+      </select>
+      <label class="f">${t('photoBefore')}</label>
+      <div class="photo-slot" id="rPhoto"><span class="cam">📷</span>${t('takePhoto')}</div>
+      <button class="btn" id="rSend">${t('send')}</button>
+    </div>`;
+  let photo=null;
+  $('#rPhoto').onclick=()=>pickPhoto(d=>{photo=d;$('#rPhoto').classList.add('filled');$('#rPhoto').innerHTML='<img src="'+d+'">';});
+  $('#rSend').onclick=async ()=>{
+    if(!photo){ toast(t('required')); return; }
+    const btn=$('#rSend'); btn.disabled=true; btn.innerHTML='<span class="spin"></span>';
+    try{
+      const r=await api('createIssue',{
+        zoneId:$('#rZone').value, reportedBy:SESSION.name, topicKey:$('#rTopic').value,
+        detail:$('#rDetail').value.trim(), priority:$('#rPriority').value, beforePhoto:photo
+      });
+      if(r.ok){ toast(t('reportSent')); supReportForm(); }
+      else { toast(t('errNet')); btn.disabled=false; btn.textContent=t('send'); }
+    }catch(e){ toast(t('errNet')); btn.disabled=false; btn.textContent=t('send'); }
+  };
+}
+
+/* ------- department ------- */
+function renderDepartment(){
+  const tabs=[['queue',t('tabQueue')+' · '+zoneName(SESSION.zone)],['dash',t('tabDash')]];
+  CUR_TAB = CUR_TAB && tabs.some(x=>x[0]===CUR_TAB) ? CUR_TAB : 'queue';
+  $('#app').innerHTML = tabBar(tabs) + `<div id="tabBody"></div>`;
+  bindTabs(renderDepartment);
+  if(CUR_TAB==='queue') listIssues('#tabBody',{zoneId:SESSION.zone,statuses:['OPEN','REJECTED']},'fix');
+  else dashboard('#tabBody');
+}
+
+/* ------- shared list ------- */
+async function listIssues(sel, filter, mode){
+  const box=$(sel); box.innerHTML=`<div class="empty">${t('loading')}</div>`;
+  let r; try{ r=await api('getIssues',filter); }catch(e){ box.innerHTML=`<div class="empty">${t('errNet')}</div>`; return; }
+  const items=(r.issues||[]);
+  if(!items.length){ box.innerHTML=`<div class="empty">${mode==='fix'?t('noTasks'):t('noItems')}</div>`; return; }
+  box.innerHTML=items.map(it=>issueCard(it,mode)).join('');
+  box.querySelectorAll('[data-photo]').forEach(b=>b.onclick=()=>showModalPhoto(b.dataset.photo));
+  box.querySelectorAll('[data-fix]').forEach(b=>b.onclick=()=>fixFlow(b.dataset.fix));
+  box.querySelectorAll('[data-approve]').forEach(b=>b.onclick=()=>reviewFlow(b.dataset.approve,'approve'));
+  box.querySelectorAll('[data-reject]').forEach(b=>b.onclick=()=>reviewFlow(b.dataset.reject,'reject'));
+}
+
+function issueCard(it, mode){
+  const pri=(it.Priority||'medium').toLowerCase();
+  let actions='';
+  if(it.BeforePhotoID) actions+=`<button class="btn ghost sm" data-photo="${it.BeforePhotoID}">${t('viewBefore')}</button>`;
+  if(it.AfterPhotoID)  actions+=`<button class="btn ghost sm" data-photo="${it.AfterPhotoID}">${t('viewAfter')}</button>`;
+  if(mode==='fix')    actions+=`<button class="btn sm" data-fix="${it.IssueID}">${t('markFixed')}</button>`;
+  if(mode==='review'){
+    actions+=`<button class="btn ok sm" data-approve="${it.IssueID}">${t('approve')}</button>`;
+    actions+=`<button class="btn warn sm" data-reject="${it.IssueID}">${t('reject')}</button>`;
+  }
+  const note = it.Status==='REJECTED' && it.ReviewNote ? `<div class="note">↩︎ ${it.ReviewNote}</div>` : '';
+  return `<div class="issue ${it.Status}">
+    <div class="top">
+      <span class="chip st-${it.Status}">${t('st_'+it.Status)}</span>
+      <span class="no">${it.RunningNo}</span>
+      <span class="spacer" style="flex:1"></span>
+      <span class="pri ${pri}">▲ ${t(pri)}</span>
+    </div>
+    <h4>${topicLabel(it.TopicKey)}</h4>
+    <div class="meta">${t('zone')}: ${zoneName(it.ZoneID)} · ${t('reportedBy')} ${it.ReportedBy} · ${fmtDate(it.CreatedAt)}</div>
+    ${it.Detail?`<div class="detail">${escapeHtml(it.Detail)}</div>`:''}
+    ${it.FixedBy?`<div class="meta">${t('fixedBy')}: ${it.FixedBy} · ${fmtDate(it.FixedAt)}</div>`:''}
+    ${note}
+    <div class="actions">${actions}</div>
+  </div>`;
+}
+
+/* ------- fix flow (department) ------- */
+function fixFlow(issueId){
+  let photo=null;
+  openSheet(`
+    <label class="f">${t('photoAfter')}</label>
+    <div class="photo-slot" id="fPhoto"><span class="cam">📷</span>${t('takePhoto')}</div>
+    <button class="btn" id="fSend">${t('markFixed')}</button>
+    <button class="btn ghost" id="fCancel">${t('cancel')}</button>
+  `, ()=>{
+    $('#fPhoto').onclick=()=>pickPhoto(d=>{photo=d;$('#fPhoto').classList.add('filled');$('#fPhoto').innerHTML='<img src="'+d+'">';});
+    $('#fCancel').onclick=closeSheet;
+    $('#fSend').onclick=async ()=>{
+      if(!photo){ toast(t('needAfter')); return; }
+      const b=$('#fSend'); b.disabled=true; b.innerHTML='<span class="spin"></span>';
+      try{ const r=await api('submitFix',{issueId, fixedBy:SESSION.name, afterPhoto:photo});
+        if(r.ok){ closeSheet(); toast(t('fixSent')); renderDepartment(); } else throw 0;
+      }catch(e){ toast(t('errNet')); b.disabled=false; b.textContent=t('markFixed'); }
+    };
+  });
+}
+
+/* ------- review flow (supervisor) ------- */
+function reviewFlow(issueId, decision){
+  if(decision==='approve'){ doReview(issueId,'approve',''); return; }
+  openSheet(`
+    <label class="f">${t('rejectReason')}</label>
+    <textarea id="rjNote" placeholder="${t('rejectReason')}"></textarea>
+    <button class="btn warn" id="rjOk">${t('reject')}</button>
+    <button class="btn ghost" id="rjCancel">${t('cancel')}</button>
+  `, ()=>{
+    $('#rjCancel').onclick=closeSheet;
+    $('#rjOk').onclick=()=>{ closeSheet(); doReview(issueId,'reject',$('#rjNote').value.trim()); };
+  });
+}
+async function doReview(issueId, decision, note){
+  try{ const r=await api('reviewIssue',{issueId, decision, reviewedBy:SESSION.name, note});
+    if(r.ok){ toast(decision==='approve'?t('closedMsg'):t('rejectedMsg')); renderSupervisor(); } else toast(t('errNet'));
+  }catch(e){ toast(t('errNet')); }
+}
+
+/* ------- dashboard ------- */
+async function dashboard(sel){
+  const box=$(sel);
+  const zoneOpts=`<option value="">${t('allZones')}</option>`+(CONFIG?.zones||[]).map(z=>`<option value="${z.id}">${z.name}</option>`).join('');
+  const statusOpts=`<option value="">${t('allStatus')}</option>`+['OPEN','FIXED','CLOSED','REJECTED'].map(s=>`<option value="${s}">${t('st_'+s)}</option>`).join('');
+  box.innerHTML=`
+    <div class="filters"><select id="dZone">${zoneOpts}</select><select id="dStatus">${statusOpts}</select></div>
+    <div id="dStats"></div><div id="dList"></div>`;
+  const load=async ()=>{
+    const zone=$('#dZone').value, status=$('#dStatus').value;
+    $('#dList').innerHTML=`<div class="empty">${t('loading')}</div>`;
+    let r; try{ r=await api('getIssues',{}); }catch(e){ $('#dList').innerHTML=`<div class="empty">${t('errNet')}</div>`; return; }
+    const all=r.issues||[];
+    // stats จากทั้งหมด
+    const st={total:all.length,open:0,fixed:0,closed:0,rejected:0};
+    let fixSum=0, fixN=0;
+    all.forEach(it=>{
+      if(it.Status==='OPEN')st.open++; else if(it.Status==='FIXED')st.fixed++;
+      else if(it.Status==='CLOSED')st.closed++; else if(it.Status==='REJECTED')st.rejected++;
+      if(it.CreatedAt&&it.FixedAt){ const d=(new Date(it.FixedAt)-new Date(it.CreatedAt))/3.6e6; if(d>=0){fixSum+=d;fixN++;} }
+    });
+    const rate=st.total? Math.round(st.closed/st.total*100):0;
+    const avg=fixN? (fixSum/fixN).toFixed(1):'–';
+    $('#dStats').innerHTML=`<div class="stats">
+      <div class="stat"><div class="n">${st.total}</div><div class="l">${t('s_total')}</div></div>
+      <div class="stat"><div class="n" style="color:var(--open)">${st.open+st.rejected}</div><div class="l">${t('s_open')}</div></div>
+      <div class="stat"><div class="n" style="color:var(--fixed)">${st.fixed}</div><div class="l">${t('s_fixed')}</div></div>
+      <div class="stat"><div class="n" style="color:var(--closed)">${st.closed}</div><div class="l">${t('s_closed')}</div></div>
+      <div class="stat"><div class="n">${rate}%</div><div class="l">${t('s_rate')}</div></div>
+      <div class="stat"><div class="n">${avg}<span style="font-size:14px"> ${t('hours')}</span></div><div class="l">${t('s_avg')}</div></div>
+    </div>`;
+    // list ตาม filter
+    let list=all.filter(it=>(!zone||it.ZoneID===zone)&&(!status||it.Status===status));
+    $('#dList').innerHTML = list.length? list.map(it=>issueCard(it,'view')).join('') : `<div class="empty">${t('noItems')}</div>`;
+    $('#dList').querySelectorAll('[data-photo]').forEach(b=>b.onclick=()=>showModalPhoto(b.dataset.photo));
+  };
+  $('#dZone').onchange=load; $('#dStatus').onchange=load; load();
+}
+
+/* ------- tab + sheet ui ------- */
+function tabBar(tabs){
+  return `<div class="tabs">`+tabs.map(x=>`<button data-tab="${x[0]}" class="${x[0]===CUR_TAB?'on':''}">${x[1]}</button>`).join('')+`</div>`;
+}
+function bindTabs(rerender){
+  $('#app').querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>{ CUR_TAB=b.dataset.tab; rerender(); });
+}
+function openSheet(html, after){
+  const m=$('#modal'); m.classList.remove('hidden');
+  $('#modalBody').innerHTML=`<div class="card" style="width:100%;max-width:520px" onclick="event.stopPropagation()">${html}</div>`;
+  $('#modalBody').firstChild.addEventListener('click',e=>e.stopPropagation());
+  if(after) after();
+}
+function closeSheet(){ $('#modal').classList.add('hidden'); }
+
+/* ------- utils ------- */
+function fmtDate(iso){ if(!iso)return''; const d=new Date(iso); if(isNaN(d))return''; 
+  return d.toLocaleDateString('en-GB',{day:'2-digit',month:'short'})+' '+d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}); }
+function escapeHtml(s){ return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+/* ---------------- boot ---------------- */
+$('#switchUser').onclick=()=>{ SESSION=null; localStorage.removeItem('session'); route(); };
+document.documentElement.lang=LANG;
+renderLang();
+
+(async ()=>{
+  if(!API_URL){ route(); return; }
+  try{ const c=await api('getConfig'); if(c.ok) CONFIG=c; }catch(e){}
+  route();
+})();
+</script>
+</body>
+</html>
