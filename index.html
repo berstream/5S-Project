@@ -57,6 +57,7 @@
   .btn:disabled{opacity:.5}
   .btn.ghost{background:var(--surface);color:var(--ink);border:1.5px solid var(--line);margin-top:10px}
   .btn.ok{background:var(--closed)} .btn.warn{background:var(--rejected)}
+  .btn.del{background:#fff;color:var(--open);border:1.5px solid var(--open)}
   .btn.sm{padding:10px;font-size:14px;margin-top:0;width:auto}
 
   .photo-slot{border:2px dashed var(--line);border-radius:12px;padding:18px;text-align:center;color:var(--muted);
@@ -205,7 +206,10 @@ const T = {
   q7days:{th:'7 วัน',en:'7 days',my:'၇ ရက်'},
   qMonth:{th:'เดือนนี้',en:'This month',my:'ဤလ'},
   qClear:{th:'ล้าง',en:'Clear',my:'ရှင်း'},
-  period:{th:'ช่วง',en:'Period',my:'ကာလ'}
+  period:{th:'ช่วง',en:'Period',my:'ကာလ'},
+  delete:{th:'ลบ',en:'Delete',my:'ဖျက်'},
+  confirmDelete:{th:'ลบรายการนี้ถาวร? รูปจะถูกย้ายไปถังขยะ Drive',en:'Delete this permanently? Photos move to Drive trash.',my:'ဤအရာကို အပြီးဖျက်မလား? ဓာတ်ပုံများ Drive အမှိုက်ပုံးသို့သွားမည်။'},
+  deleted:{th:'ลบแล้ว',en:'Deleted',my:'ဖျက်ပြီး'}
 };
 
 const noApiMsg = {
@@ -224,6 +228,8 @@ const $ = s => document.querySelector(s);
 const t = k => (T[k] && T[k][LANG]) || (T[k] && T[k].th) || k;
 const topicLabel = key => { const x=(CONFIG?.topics||[]).find(o=>o.key===key); return x? x[LANG]||x.th : key; };
 const zoneName = id => { const z=(CONFIG?.zones||[]).find(o=>o.id===id); return z? z.name : id; };
+const ADMIN_NAMES=['admin','แอดมิน'];
+const isAdmin=()=> !!SESSION && SESSION.role==='supervisor' && ADMIN_NAMES.includes((SESSION.name||'').trim().toLowerCase());
 
 /* ---------------- api ---------------- */
 async function api(action, payload){
@@ -411,6 +417,7 @@ async function listIssues(sel, filter, mode){
   box.querySelectorAll('[data-fix]').forEach(b=>b.onclick=()=>fixFlow(b.dataset.fix));
   box.querySelectorAll('[data-approve]').forEach(b=>b.onclick=()=>reviewFlow(b.dataset.approve,'approve'));
   box.querySelectorAll('[data-reject]').forEach(b=>b.onclick=()=>reviewFlow(b.dataset.reject,'reject'));
+  box.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>deleteFlow(b.dataset.del, route));
 }
 
 function issueCard(it, mode){
@@ -423,6 +430,7 @@ function issueCard(it, mode){
     actions+=`<button class="btn ok sm" data-approve="${it.IssueID}">${t('approve')}</button>`;
     actions+=`<button class="btn warn sm" data-reject="${it.IssueID}">${t('reject')}</button>`;
   }
+  if(isAdmin()) actions+=`<button class="btn del sm" data-del="${it.IssueID}">${t('delete')}</button>`;
   const note = it.Status==='REJECTED' && it.ReviewNote ? `<div class="note">↩︎ ${it.ReviewNote}</div>` : '';
   return `<div class="issue ${it.Status}">
     <div class="top">
@@ -480,6 +488,24 @@ async function doReview(issueId, decision, note){
   }catch(e){ toast(t('errNet')); }
 }
 
+/* ------- delete flow (admin only) ------- */
+function deleteFlow(id, onDone){
+  openSheet(`
+    <div style="font-weight:800;font-size:17px;margin-bottom:6px">${t('delete')}?</div>
+    <div style="color:var(--muted);font-size:14px;margin-bottom:2px">${t('confirmDelete')}</div>
+    <button class="btn del" id="delOk">${t('delete')}</button>
+    <button class="btn ghost" id="delCancel">${t('cancel')}</button>
+  `, ()=>{
+    $('#delCancel').onclick=closeSheet;
+    $('#delOk').onclick=async ()=>{
+      const b=$('#delOk'); b.disabled=true; b.innerHTML='<span class="spin"></span>';
+      try{ const r=await api('deleteIssue',{issueId:id, by:SESSION.name});
+        if(r.ok){ closeSheet(); toast(t('deleted')); onDone&&onDone(); } else throw 0;
+      }catch(e){ toast(t('errNet')); b.disabled=false; b.textContent=t('delete'); }
+    };
+  });
+}
+
 /* ------- dashboard ------- */
 async function dashboard(sel){
   const box=$(sel);
@@ -529,6 +555,7 @@ async function dashboard(sel){
     const list=scope.filter(it=>(!status||it.Status===status));
     $('#dList').innerHTML = list.length? list.map(it=>issueCard(it,'view')).join('') : `<div class="empty">${t('noItems')}</div>`;
     $('#dList').querySelectorAll('[data-photo]').forEach(b=>b.onclick=()=>showModalPhoto(b.dataset.photo));
+    $('#dList').querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>deleteFlow(b.dataset.del, load));
   };
 
   $('#dZone').onchange=load; $('#dStatus').onchange=load; $('#dFrom').onchange=load; $('#dTo').onchange=load;
