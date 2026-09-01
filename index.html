@@ -91,6 +91,15 @@
   .stat .l{font-size:12px;color:var(--muted);font-weight:700;margin-top:4px}
   .filters{display:flex;gap:8px;margin-bottom:14px}
   .filters select{flex:1}
+  .filters label{display:flex;flex-direction:column;gap:3px}
+  .dlab{font-size:11px;font-weight:700;color:var(--muted)}
+  .filters input[type=date]{width:100%;border:1.5px solid var(--line);border-radius:10px;padding:10px;
+    font-family:inherit;font-size:15px;background:#fbfcfd;color:var(--ink)}
+  .quick{display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap}
+  .quick button{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:7px 13px;
+    font-size:13px;font-weight:700;color:var(--muted);cursor:pointer}
+  .quick button.on{background:var(--accent);color:#fff;border-color:var(--accent)}
+  .caption{font-size:13px;font-weight:700;color:var(--muted);margin-bottom:10px}
 
   .empty{text-align:center;color:var(--muted);padding:40px 20px;font-size:14px}
   .hidden{display:none!important}
@@ -189,7 +198,14 @@ const T = {
   closedMsg:{th:'ปิดงานแล้ว',en:'Closed',my:'ပိတ်ပြီး'},
   rejectedMsg:{th:'ตีกลับแล้ว',en:'Rejected',my:'ပြန်ပို့ပြီး'},
   errNet:{th:'เชื่อมต่อไม่ได้ ลองใหม่',en:'Connection error',my:'ချိတ်ဆက်မှုမအောင်မြင်'},
-  loading:{th:'กำลังโหลด…',en:'Loading…',my:'ခဏစောင့်ပါ…'}
+  loading:{th:'กำลังโหลด…',en:'Loading…',my:'ခဏစောင့်ပါ…'},
+  dateFrom:{th:'จากวันที่',en:'From',my:'မှ'},
+  dateTo:{th:'ถึงวันที่',en:'To',my:'အထိ'},
+  qToday:{th:'วันนี้',en:'Today',my:'ယနေ့'},
+  q7days:{th:'7 วัน',en:'7 days',my:'၇ ရက်'},
+  qMonth:{th:'เดือนนี้',en:'This month',my:'ဤလ'},
+  qClear:{th:'ล้าง',en:'Clear',my:'ရှင်း'},
+  period:{th:'ช่วง',en:'Period',my:'ကာလ'}
 };
 
 const noApiMsg = {
@@ -471,16 +487,31 @@ async function dashboard(sel){
   const statusOpts=`<option value="">${t('allStatus')}</option>`+['OPEN','FIXED','CLOSED','REJECTED'].map(s=>`<option value="${s}">${t('st_'+s)}</option>`).join('');
   box.innerHTML=`
     <div class="filters"><select id="dZone">${zoneOpts}</select><select id="dStatus">${statusOpts}</select></div>
-    <div id="dStats"></div><div id="dList"></div>`;
+    <div class="filters">
+      <label style="flex:1"><span class="dlab">${t('dateFrom')}</span><input type="date" id="dFrom"></label>
+      <label style="flex:1"><span class="dlab">${t('dateTo')}</span><input type="date" id="dTo"></label>
+    </div>
+    <div class="quick">
+      <button data-q="today">${t('qToday')}</button>
+      <button data-q="7">${t('q7days')}</button>
+      <button data-q="month">${t('qMonth')}</button>
+      <button data-q="clear">${t('qClear')}</button>
+    </div>
+    <div id="dCaption"></div><div id="dStats"></div><div id="dList"></div>`;
+
   const load=async ()=>{
-    const zone=$('#dZone').value, status=$('#dStatus').value;
+    const zone=$('#dZone').value, status=$('#dStatus').value, from=$('#dFrom').value, to=$('#dTo').value;
     $('#dList').innerHTML=`<div class="empty">${t('loading')}</div>`;
     let r; try{ r=await api('getIssues',{}); }catch(e){ $('#dList').innerHTML=`<div class="empty">${t('errNet')}</div>`; return; }
     const all=r.issues||[];
-    // stats จากทั้งหมด
-    const st={total:all.length,open:0,fixed:0,closed:0,rejected:0};
+    const inRange=it=>{ const day=ymdLocal(it.CreatedAt); if(!day)return false; if(from&&day<from)return false; if(to&&day>to)return false; return true; };
+    // zone + ช่วงวัน มีผลกับทั้งสถิติและรายการ ; status กรองเฉพาะรายการ
+    const scope=all.filter(it=>(!zone||it.ZoneID===zone)&&inRange(it));
+    $('#dCaption').innerHTML=(from||to)
+      ? `<div class="caption">${t('period')}: ${from?fmtYMD(from):'…'} – ${to?fmtYMD(to):'…'}${zone?' · '+zoneName(zone):''}</div>` : '';
+    const st={total:scope.length,open:0,fixed:0,closed:0,rejected:0};
     let fixSum=0, fixN=0;
-    all.forEach(it=>{
+    scope.forEach(it=>{
       if(it.Status==='OPEN')st.open++; else if(it.Status==='FIXED')st.fixed++;
       else if(it.Status==='CLOSED')st.closed++; else if(it.Status==='REJECTED')st.rejected++;
       if(it.CreatedAt&&it.FixedAt){ const d=(new Date(it.FixedAt)-new Date(it.CreatedAt))/3.6e6; if(d>=0){fixSum+=d;fixN++;} }
@@ -495,12 +526,21 @@ async function dashboard(sel){
       <div class="stat"><div class="n">${rate}%</div><div class="l">${t('s_rate')}</div></div>
       <div class="stat"><div class="n">${avg}<span style="font-size:14px"> ${t('hours')}</span></div><div class="l">${t('s_avg')}</div></div>
     </div>`;
-    // list ตาม filter
-    let list=all.filter(it=>(!zone||it.ZoneID===zone)&&(!status||it.Status===status));
+    const list=scope.filter(it=>(!status||it.Status===status));
     $('#dList').innerHTML = list.length? list.map(it=>issueCard(it,'view')).join('') : `<div class="empty">${t('noItems')}</div>`;
     $('#dList').querySelectorAll('[data-photo]').forEach(b=>b.onclick=()=>showModalPhoto(b.dataset.photo));
   };
-  $('#dZone').onchange=load; $('#dStatus').onchange=load; load();
+
+  $('#dZone').onchange=load; $('#dStatus').onchange=load; $('#dFrom').onchange=load; $('#dTo').onchange=load;
+  box.querySelectorAll('.quick button').forEach(b=>b.onclick=()=>{
+    const q=b.dataset.q;
+    if(q==='clear'){ $('#dFrom').value=''; $('#dTo').value=''; }
+    else if(q==='today'){ const d=todayYMD(); $('#dFrom').value=d; $('#dTo').value=d; }
+    else if(q==='7'){ $('#dFrom').value=ymdOffset(-6); $('#dTo').value=todayYMD(); }
+    else if(q==='month'){ $('#dFrom').value=monthFirstYMD(); $('#dTo').value=todayYMD(); }
+    load();
+  });
+  load();
 }
 
 /* ------- tab + sheet ui ------- */
@@ -522,6 +562,12 @@ function closeSheet(){ $('#modal').classList.add('hidden'); }
 function fmtDate(iso){ if(!iso)return''; const d=new Date(iso); if(isNaN(d))return''; 
   return d.toLocaleDateString('en-GB',{day:'2-digit',month:'short'})+' '+d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}); }
 function escapeHtml(s){ return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function ymdLocal(iso){ const d=new Date(iso); if(isNaN(d))return'';
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function todayYMD(){ return ymdLocal(new Date().toISOString()); }
+function ymdOffset(days){ const d=new Date(); d.setDate(d.getDate()+days); return ymdLocal(d.toISOString()); }
+function monthFirstYMD(){ const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-01'; }
+function fmtYMD(ymd){ const d=new Date(ymd+'T00:00:00'); return isNaN(d)?ymd:d.toLocaleDateString('en-GB',{day:'2-digit',month:'short'}); }
 
 /* ---------------- boot ---------------- */
 $('#switchUser').onclick=()=>{ SESSION=null; localStorage.removeItem('session'); route(); };
