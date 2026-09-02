@@ -108,6 +108,10 @@
   .modal{position:fixed;inset:0;background:rgba(10,15,25,.82);z-index:50;display:flex;align-items:center;
     justify-content:center;padding:16px}
   .modal img{max-width:100%;max-height:82vh;border-radius:10px}
+  .emp-found{background:var(--closed-bg);border:1.5px solid var(--closed);border-radius:12px;padding:14px;margin:12px 0}
+  .emp-found .ename{font-weight:800;font-size:16px;color:var(--closed)}
+  .emp-found .epos{font-size:13px;color:var(--muted);margin-top:2px}
+  .err-msg{color:var(--open);font-size:13px;font-weight:700;margin:8px 0 0}
   .modal .x{position:absolute;top:14px;right:16px;color:#fff;font-size:30px;font-weight:300;cursor:pointer;line-height:1}
   .modal .load{color:#fff;font-size:14px}
 
@@ -124,7 +128,7 @@
 <body>
 
 <header class="hidden" id="hdr">
-  <div class="brand">5ส Audit<small>WFDC · CJ Logistics</small></div>
+  <div class="brand" id="hdrBrand">5ส Audit<small>WFDC · CJ Logistics</small></div>
   <div class="spacer"></div>
   <div class="lang" id="lang"></div>
   <button class="iconbtn" id="switchUser" title="switch">⇄</button>
@@ -144,6 +148,7 @@ const API_URL = "https://script.google.com/macros/s/AKfycbwkQ3cnsYhiQCXKYMIY78e5
 
 /* ---------------- i18n ---------------- */
 const T = {
+  brand:{th:'5ส Audit',en:'5S Audit',my:'5S စစ်ဆေးမှု'},
   appTitle:{th:'5ส Audit',en:'5S Audit',my:'5S စစ်ဆေးမှု'},
   chooseRole:{th:'เข้าใช้งานในบทบาท',en:'Sign in as',my:'အသုံးပြုမည့်အခန်းကဏ္ဍ'},
   supervisor:{th:'หัวหน้างาน',en:'Supervisor',my:'ကြီးကြပ်ရေးမှူး'},
@@ -209,7 +214,14 @@ const T = {
   period:{th:'ช่วง',en:'Period',my:'ကာလ'},
   delete:{th:'ลบ',en:'Delete',my:'ဖျက်'},
   confirmDelete:{th:'ลบรายการนี้ถาวร? รูปจะถูกย้ายไปถังขยะ Drive',en:'Delete this permanently? Photos move to Drive trash.',my:'ဤအရာကို အပြီးဖျက်မလား? ဓာတ်ပုံများ Drive အမှိုက်ပုံးသို့သွားမည်။'},
-  deleted:{th:'ลบแล้ว',en:'Deleted',my:'ဖျက်ပြီး'}
+  deleted:{th:'ลบแล้ว',en:'Deleted',my:'ဖျက်ပြီး'},
+  empId:{th:'รหัสพนักงาน',en:'Employee ID',my:'ဝန်ထမ်းကုဒ်'},
+  empIdPh:{th:'เช่น TH061378',en:'e.g. TH061378',my:'ဥပမာ TH061378'},
+  verify:{th:'ตรวจสอบ',en:'Verify',my:'စစ်ဆေး'},
+  empNotFound:{th:'ไม่พบรหัสพนักงาน หรือไม่มีสิทธิ์เข้าใช้งาน',en:'Employee ID not found or unauthorized',my:'ဝန်ထမ်းကုဒ်မတွေ့ပါ'},
+  empInactive:{th:'รหัสพนักงานนี้ถูกระงับการใช้งาน',en:'This employee ID is inactive',my:'ဤကုဒ်ကိုပိတ်ထားသည်'},
+  empFmt:{th:'รูปแบบไม่ถูกต้อง (ต้องเป็น TH + 6 หลัก)',en:'Invalid format (must be TH + 6 digits)',my:'ပုံစံမမှန်ပါ (TH + ဂဏန်း ၆ လုံး)'},
+  hello:{th:'สวัสดี',en:'Hello',my:'မင်္ဂလာပါ'}
 };
 
 const noApiMsg = {
@@ -282,6 +294,7 @@ $('#modalX').onclick=()=>$('#modal').classList.add('hidden');
 $('#modal').onclick=e=>{ if(e.target.id==='modal') $('#modal').classList.add('hidden'); };
 
 function renderLang(){
+  const hb=$('#hdrBrand'); if(hb) hb.innerHTML=`${t('brand')}<small>WFDC · CJ Logistics</small>`;
   $('#lang').innerHTML = ['th','en','my'].map(l=>
     `<button class="${l===LANG?'on':''}" data-l="${l}">${l.toUpperCase()}</button>`).join('');
   $('#lang').querySelectorAll('button').forEach(b=>b.onclick=()=>{
@@ -303,7 +316,7 @@ function renderLogin(){
   const zoneOpts = (CONFIG?.zones||[]).map(z=>`<option value="${z.id}">${z.name}</option>`).join('');
   $('#app').innerHTML = `
     <div style="text-align:center;padding:22px 0 6px">
-      <div style="font-size:30px;font-weight:800;letter-spacing:-.5px">5ส Audit</div>
+      <div style="font-size:30px;font-weight:800;letter-spacing:-.5px">${t('brand')}</div>
       <div style="color:var(--muted);font-size:13px;margin-top:2px">WFDC · CJ Logistics</div>
     </div>
     <div class="lang" id="langLogin" style="width:max-content;margin:10px auto 20px"></div>
@@ -320,12 +333,25 @@ function renderLogin(){
         <div style="color:var(--muted);font-size:13px">${t('departmentSub')}</div>
       </button>
 
-      <div id="loginZone" class="hidden">
+      <!-- ฝั่งหัวหน้า: กรอกรหัสพนักงาน -->
+      <div id="supLogin" class="hidden">
+        <label class="f">${t('empId')}</label>
+        <div style="display:flex;gap:8px">
+          <input type="text" id="inEmpId" placeholder="${t('empIdPh')}" maxlength="8"
+            style="text-transform:uppercase;flex:1;letter-spacing:1px">
+          <button class="btn sm" id="verifyBtn" style="width:auto;margin-top:0;padding:0 16px">${t('verify')}</button>
+        </div>
+        <div id="empResult"></div>
+      </div>
+
+      <!-- ฝั่งแผนก: พิมพ์ชื่ออะไรก็ได้ -->
+      <div id="deptLogin" class="hidden">
         <label class="f">${t('selectZone')}</label>
         <select id="inZone">${zoneOpts}</select>
+        <label class="f">${t('yourName')}</label>
+        <input type="text" id="inName" placeholder="${t('yourName')}">
       </div>
-      <label class="f">${t('yourName')}</label>
-      <input type="text" id="inName" placeholder="${t('yourName')}" value="${SESSION?.name||''}">
+
       <button class="btn" id="startBtn" disabled>${t('start')}</button>
     </div>`;
 
@@ -334,19 +360,61 @@ function renderLogin(){
   ll.innerHTML=['th','en','my'].map(l=>`<button class="${l===LANG?'on':''}" data-l="${l}">${l.toUpperCase()}</button>`).join('');
   ll.querySelectorAll('button').forEach(b=>b.onclick=()=>{LANG=b.dataset.l;localStorage.setItem('lang',LANG);renderLang();renderLogin();});
 
-  let role=null;
-  const btn=$('#startBtn'), name=$('#inName');
-  const refresh=()=>{ btn.disabled=!(role && name.value.trim()); };
+  let role=null, empData=null;
+  const startBtn=$('#startBtn');
+
+  // เลือกบทบาท
   $('#app').querySelectorAll('.rolebtn').forEach(b=>b.onclick=()=>{
-    role=b.dataset.role;
+    role=b.dataset.role; empData=null;
     $('#app').querySelectorAll('.rolebtn').forEach(x=>x.style.borderColor='var(--line)');
     b.style.borderColor='var(--accent)';
-    $('#loginZone').classList.toggle('hidden', role!=='department');
-    refresh();
+    $('#supLogin').classList.toggle('hidden', role!=='supervisor');
+    $('#deptLogin').classList.toggle('hidden', role!=='department');
+    startBtn.disabled=true;
+    if(role==='department') refreshDeptBtn();
   });
-  name.oninput=refresh;
-  btn.onclick=()=>{
-    SESSION={ role, name:name.value.trim(), zone: role==='department' ? $('#inZone').value : null };
+
+  // ฝั่งแผนก — refresh ปุ่มตามชื่อ
+  const refreshDeptBtn=()=>{ startBtn.disabled=!($('#inName')&&$('#inName').value.trim()); };
+  $('#app').addEventListener('input',e=>{ if(e.target.id==='inName') refreshDeptBtn(); });
+
+  // ฝั่งหัวหน้า — ตรวจรหัส
+  const empResult=$('#empResult');
+  const doVerify=async ()=>{
+    const raw=($('#inEmpId').value||'').trim().toUpperCase();
+    empData=null; startBtn.disabled=true;
+    if(!raw){ empResult.innerHTML=''; return; }
+    if(!/^TH\d{6}$/.test(raw)){ empResult.innerHTML=`<div class="err-msg">⚠ ${t('empFmt')}</div>`; return; }
+    const vb=$('#verifyBtn'); vb.disabled=true; vb.innerHTML='<span class="spin"></span>';
+    try{
+      const r=await api('lookupEmployee',{empId:raw});
+      if(r.ok){
+        empData={empId:r.empId, name:r.name, position:r.position};
+        empResult.innerHTML=`<div class="emp-found">
+          <div class="ename">✓ ${t('hello')}, ${r.name}</div>
+          <div class="epos">${r.position}</div>
+        </div>`;
+        startBtn.disabled=false;
+      } else {
+        const msg = r.error==='inactive'? t('empInactive') : t('empNotFound');
+        empResult.innerHTML=`<div class="err-msg">✕ ${msg}</div>`;
+      }
+    }catch(e){ empResult.innerHTML=`<div class="err-msg">✕ ${t('errNet')}</div>`; }
+    vb.disabled=false; vb.textContent=t('verify');
+  };
+  $('#app').addEventListener('click',e=>{ if(e.target.id==='verifyBtn') doVerify(); });
+  $('#app').addEventListener('keydown',e=>{ if(e.target.id==='inEmpId'&&e.key==='Enter') doVerify(); });
+
+  // เริ่มใช้งาน
+  startBtn.onclick=()=>{
+    if(role==='supervisor' && empData){
+      SESSION={ role:'supervisor', name:empData.name, empId:empData.empId,
+        position:empData.position, zone:null };
+    } else if(role==='department'){
+      const name=$('#inName').value.trim();
+      if(!name) return;
+      SESSION={ role:'department', name, zone:$('#inZone').value };
+    } else return;
     localStorage.setItem('session', JSON.stringify(SESSION));
     CUR_TAB = role==='supervisor' ? 'report' : 'queue';
     route();
