@@ -241,12 +241,17 @@ async function loadPhoto(id){
   const b64 = await res.text();
   return 'data:image/jpeg;base64,' + b64;
 }
+// ตรวจกับเซิร์ฟเวอร์ว่าสถานะเปลี่ยนจริงหรือยัง (กันกรณีเน็ตตัด response แต่บันทึกสำเร็จ)
+async function verifyStatus(issueId, expected){
+  try{ const r=await api('getIssues',{}); const it=(r.issues||[]).find(x=>String(x.IssueID)===String(issueId));
+    return !!(it && it.Status===expected); }catch(e){ return false; }
+}
 
 /* ---------------- photo capture + resize ---------------- */
 function pickPhoto(onReady){
   const inp = document.createElement('input');
   inp.type='file'; inp.accept='image/*';
-  inp.onchange = () => { if(inp.files[0]) resizeImage(inp.files[0], 1280, .72).then(onReady); };
+  inp.onchange = () => { if(inp.files[0]) resizeImage(inp.files[0], 1100, .65).then(onReady); };
   inp.click();
 }
 function resizeImage(file, maxDim, quality){
@@ -462,9 +467,11 @@ function fixFlow(issueId){
     $('#fSend').onclick=async ()=>{
       if(!photo){ toast(t('needAfter')); return; }
       const b=$('#fSend'); b.disabled=true; b.innerHTML='<span class="spin"></span>';
-      try{ const r=await api('submitFix',{issueId, fixedBy:SESSION.name, afterPhoto:photo});
-        if(r.ok){ closeSheet(); toast(t('fixSent')); renderDepartment(); } else throw 0;
-      }catch(e){ toast(t('errNet')); b.disabled=false; b.textContent=t('markFixed'); }
+      let ok=false;
+      try{ const r=await api('submitFix',{issueId, fixedBy:SESSION.name, afterPhoto:photo}); ok=!!(r&&r.ok); }catch(e){}
+      if(!ok) ok=await verifyStatus(issueId,'FIXED');
+      if(ok){ closeSheet(); toast(t('fixSent')); renderDepartment(); }
+      else { toast(t('errNet')); b.disabled=false; b.textContent=t('markFixed'); }
     };
   });
 }
@@ -483,9 +490,12 @@ function reviewFlow(issueId, decision){
   });
 }
 async function doReview(issueId, decision, note){
-  try{ const r=await api('reviewIssue',{issueId, decision, reviewedBy:SESSION.name, note});
-    if(r.ok){ toast(decision==='approve'?t('closedMsg'):t('rejectedMsg')); renderSupervisor(); } else toast(t('errNet'));
-  }catch(e){ toast(t('errNet')); }
+  const expected = decision==='approve'?'CLOSED':'REJECTED';
+  let ok=false;
+  try{ const r=await api('reviewIssue',{issueId, decision, reviewedBy:SESSION.name, note}); ok=!!(r&&r.ok); }catch(e){}
+  if(!ok) ok=await verifyStatus(issueId,expected);
+  if(ok){ toast(decision==='approve'?t('closedMsg'):t('rejectedMsg')); renderSupervisor(); }
+  else toast(t('errNet'));
 }
 
 /* ------- delete flow (admin only) ------- */
