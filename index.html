@@ -119,6 +119,14 @@
     padding:11px 18px;border-radius:999px;font-size:14px;font-weight:700;z-index:60;box-shadow:var(--shadow);
     opacity:0;transition:opacity .2s}
   .toast.show{opacity:1}
+  .bulkbar{position:fixed;left:50%;transform:translateX(-50%);bottom:14px;z-index:55;
+    width:calc(100% - 28px);max-width:532px;background:var(--surface);border:1px solid var(--line);
+    border-radius:14px;box-shadow:0 4px 18px rgba(20,30,50,.18);padding:10px 12px;
+    display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .bulkbar .bcount{font-weight:800;font-size:13px;color:var(--ink);margin-right:auto}
+  .bulkbar .btn{margin-top:0}
+  .bulk-cb{width:22px;height:22px;accent-color:var(--accent);margin:0 2px 0 0;flex:0 0 auto;cursor:pointer}
+  .issue .top{align-items:center}
   .spin{width:16px;height:16px;border:2px solid rgba(255,255,255,.4);border-top-color:#fff;border-radius:50%;
     display:inline-block;animation:sp .7s linear infinite;vertical-align:-3px}
   @keyframes sp{to{transform:rotate(360deg)}}
@@ -138,6 +146,7 @@
 <main id="app"></main>
 
 <div class="modal hidden" id="modal"><span class="x" id="modalX">×</span><div id="modalBody"></div></div>
+<div class="bulkbar hidden" id="bulkBar"></div>
 <div class="toast" id="toast"></div>
 
 <script>
@@ -221,7 +230,8 @@ const T = {
   empNotFound:{th:'ไม่พบรหัสพนักงาน หรือไม่มีสิทธิ์เข้าใช้งาน',en:'Employee ID not found or unauthorized',my:'ဝန်ထမ်းကုဒ်မတွေ့ပါ'},
   empInactive:{th:'รหัสพนักงานนี้ถูกระงับการใช้งาน',en:'This employee ID is inactive',my:'ဤကုဒ်ကိုပိတ်ထားသည်'},
   empFmt:{th:'รูปแบบไม่ถูกต้อง (ต้องเป็น TH + 6 หลัก)',en:'Invalid format (must be TH + 6 digits)',my:'ပုံစံမမှန်ပါ (TH + ဂဏန်း ၆ လုံး)'},
-  hello:{th:'สวัสดี',en:'Hello',my:'မင်္ဂလာပါ'}
+  hello:{th:'สวัสดี',en:'Hello',my:'မင်္ဂလာပါ'},
+  selected:{th:'เลือก',en:'Selected',my:'ရွေးထား'}
 };
 
 const noApiMsg = {
@@ -235,6 +245,7 @@ let LANG = localStorage.getItem('lang') || 'th';
 let SESSION = JSON.parse(localStorage.getItem('session') || 'null'); // {role, name, zone}
 let CONFIG = null;
 let CUR_TAB = null;
+const BULK_SEL = new Set();
 
 const $ = s => document.querySelector(s);
 const t = k => (T[k] && T[k][LANG]) || (T[k] && T[k].th) || k;
@@ -313,6 +324,7 @@ function route(){
 }
 
 function renderLogin(){
+  resetBulk();
   const zoneOpts = (CONFIG?.zones||[]).map(z=>`<option value="${z.id}">${z.name}</option>`).join('');
   $('#app').innerHTML = `
     <div style="text-align:center;padding:22px 0 6px">
@@ -423,6 +435,7 @@ function renderLogin(){
 
 /* ------- supervisor ------- */
 function renderSupervisor(){
+  resetBulk();
   const tabs=[['report',t('tabReport')],['review',t('tabReview')],['dash',t('tabDash')]];
   CUR_TAB = CUR_TAB && tabs.some(x=>x[0]===CUR_TAB) ? CUR_TAB : 'report';
   $('#app').innerHTML = tabBar(tabs) + `<div id="tabBody"></div>`;
@@ -471,6 +484,7 @@ function supReportForm(){
 
 /* ------- department ------- */
 function renderDepartment(){
+  resetBulk();
   const tabs=[['queue',t('tabQueue')+' · '+zoneName(SESSION.zone)],['dash',t('tabDash')]];
   CUR_TAB = CUR_TAB && tabs.some(x=>x[0]===CUR_TAB) ? CUR_TAB : 'queue';
   $('#app').innerHTML = tabBar(tabs) + `<div id="tabBody"></div>`;
@@ -491,6 +505,12 @@ async function listIssues(sel, filter, mode){
   box.querySelectorAll('[data-approve]').forEach(b=>b.onclick=()=>reviewFlow(b.dataset.approve,'approve'));
   box.querySelectorAll('[data-reject]').forEach(b=>b.onclick=()=>reviewFlow(b.dataset.reject,'reject'));
   box.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>deleteFlow(b.dataset.del, route));
+  box.querySelectorAll('[data-cb]').forEach(cb=>cb.onchange=()=>{
+    const id=String(cb.dataset.cb);
+    if(cb.checked) BULK_SEL.add(id); else BULK_SEL.delete(id);
+    updateBulkBar();
+  });
+  if(mode==='review') updateBulkBar();
 }
 
 function issueCard(it, mode){
@@ -505,8 +525,10 @@ function issueCard(it, mode){
   }
   if(isAdmin()) actions+=`<button class="btn del sm" data-del="${it.IssueID}">${t('delete')}</button>`;
   const note = it.Status==='REJECTED' && it.ReviewNote ? `<div class="note">↩︎ ${it.ReviewNote}</div>` : '';
+  const check = mode==='review' ? `<input type="checkbox" class="bulk-cb" data-cb="${it.IssueID}" ${BULK_SEL.has(String(it.IssueID))?'checked':''}>` : '';
   return `<div class="issue ${it.Status}">
     <div class="top">
+      ${check}
       <span class="chip st-${it.Status}">${t('st_'+it.Status)}</span>
       <span class="no">${it.RunningNo}</span>
       <span class="spacer" style="flex:1"></span>
@@ -564,6 +586,45 @@ async function doReview(issueId, decision, note){
   if(!ok) ok=await verifyStatus(issueId,expected);
   if(ok){ toast(decision==='approve'?t('closedMsg'):t('rejectedMsg')); renderSupervisor(); }
   else toast(t('errNet'));
+}
+
+/* ------- bulk review (หัวหน้า: เลือกหลายใบ) ------- */
+function resetBulk(){ BULK_SEL.clear(); const b=$('#bulkBar'); if(b){ b.classList.add('hidden'); b.innerHTML=''; } document.body.style.paddingBottom=''; }
+function updateBulkBar(){
+  const bar=$('#bulkBar'); if(!bar) return;
+  const n=BULK_SEL.size;
+  if(!n){ bar.classList.add('hidden'); bar.innerHTML=''; document.body.style.paddingBottom=''; return; }
+  bar.classList.remove('hidden');
+  bar.innerHTML=`<span class="bcount">${t('selected')} ${n}</span>
+    <button class="btn ok sm" id="bulkOk">${t('approve')} (${n})</button>
+    <button class="btn warn sm" id="bulkReject">${t('reject')} (${n})</button>`;
+  $('#bulkOk').onclick=()=>bulkReview('approve','');
+  $('#bulkReject').onclick=bulkRejectFlow;
+  document.body.style.paddingBottom='86px';
+}
+function bulkRejectFlow(){
+  const n=BULK_SEL.size; if(!n) return;
+  openSheet(`
+    <div style="font-weight:800;font-size:15px;margin-bottom:6px">${t('reject')} (${n})</div>
+    <label class="f">${t('rejectReason')}</label>
+    <textarea id="bjNote" placeholder="${t('rejectReason')}"></textarea>
+    <button class="btn warn" id="bjOk">${t('reject')} (${n})</button>
+    <button class="btn ghost" id="bjCancel">${t('cancel')}</button>
+  `, ()=>{
+    $('#bjCancel').onclick=closeSheet;
+    $('#bjOk').onclick=()=>{ const note=$('#bjNote').value.trim(); closeSheet(); bulkReview('reject', note); };
+  });
+}
+async function bulkReview(decision, note){
+  const ids=[...BULK_SEL]; if(!ids.length) return;
+  const bar=$('#bulkBar'); if(bar) bar.innerHTML=`<span class="bcount"><span class="spin"></span> ${t('loading')}</span>`;
+  let done=0;
+  for(const id of ids){
+    try{ const r=await api('reviewIssue',{issueId:id, decision, reviewedBy:SESSION.name, note:note||''}); if(r&&r.ok) done++; }catch(e){}
+  }
+  BULK_SEL.clear();
+  toast((decision==='approve'?t('closedMsg'):t('rejectedMsg'))+` ${done}/${ids.length}`);
+  renderSupervisor();
 }
 
 /* ------- delete flow (admin only) ------- */
