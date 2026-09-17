@@ -231,7 +231,9 @@ const T = {
   empInactive:{th:'รหัสพนักงานนี้ถูกระงับการใช้งาน',en:'This employee ID is inactive',my:'ဤကုဒ်ကိုပိတ်ထားသည်'},
   empFmt:{th:'รูปแบบไม่ถูกต้อง (ต้องเป็น TH + 6 หลัก)',en:'Invalid format (must be TH + 6 digits)',my:'ပုံစံမမှန်ပါ (TH + ဂဏန်း ၆ လုံး)'},
   hello:{th:'สวัสดี',en:'Hello',my:'မင်္ဂလာပါ'},
-  selected:{th:'เลือก',en:'Selected',my:'ရွေးထား'}
+  selected:{th:'เลือก',en:'Selected',my:'ရွေးထား'},
+  pickZone:{th:'— เลือกเขต —',en:'— Select zone —',my:'— ဇုန်ရွေးပါ —'},
+  pickTopic:{th:'— เลือกหัวข้อปัญหา —',en:'— Select topic —',my:'— ခေါင်းစဉ်ရွေးပါ —'}
 };
 
 const noApiMsg = {
@@ -451,9 +453,9 @@ function supReportForm(){
   $('#tabBody').innerHTML=`
     <div class="card">
       <label class="f">${t('zone')}</label>
-      <select id="rZone">${zoneOpts}</select>
+      <select id="rZone"><option value="" disabled selected>${t('pickZone')}</option>${zoneOpts}</select>
       <label class="f">${t('topic')}</label>
-      <select id="rTopic">${topicOpts}</select>
+      <select id="rTopic"><option value="" disabled selected>${t('pickTopic')}</option>${topicOpts}</select>
       <label class="f">${t('detail')}</label>
       <textarea id="rDetail" placeholder="${t('detailPh')}"></textarea>
       <label class="f">${t('priority')}</label>
@@ -464,12 +466,14 @@ function supReportForm(){
       </select>
       <label class="f">${t('photoBefore')}</label>
       <div class="photo-slot" id="rPhoto"><span class="cam">📷</span>${t('takePhoto')}</div>
-      <button class="btn" id="rSend">${t('send')}</button>
+      <button class="btn" id="rSend" disabled>${t('send')}</button>
     </div>`;
   let photo=null;
-  $('#rPhoto').onclick=()=>pickPhoto(d=>{photo=d;$('#rPhoto').classList.add('filled');$('#rPhoto').innerHTML='<img src="'+d+'">';});
+  const refresh=()=>{ $('#rSend').disabled=!($('#rZone').value && $('#rTopic').value && photo); };
+  $('#rZone').onchange=refresh; $('#rTopic').onchange=refresh;
+  $('#rPhoto').onclick=()=>pickPhoto(d=>{photo=d;$('#rPhoto').classList.add('filled');$('#rPhoto').innerHTML='<img src="'+d+'">';refresh();});
   $('#rSend').onclick=async ()=>{
-    if(!photo){ toast(t('required')); return; }
+    if(!($('#rZone').value && $('#rTopic').value && photo)){ toast(t('required')); return; }
     const btn=$('#rSend'); btn.disabled=true; btn.innerHTML='<span class="spin"></span>';
     try{
       const r=await api('createIssue',{
